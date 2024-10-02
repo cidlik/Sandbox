@@ -11,3 +11,17 @@
   gather_facts: false
   tasks:
     - command: hostname
+
+# PLAY [all:!exclude_group] *****************************************************************************
+
+# TASK [command] ****************************************************************************************
+# changed: [dojo-pc] => {"ansible_facts": {"discovered_interpreter_python": "/usr/libexec/platform-python"}, "changed": true, "cmd": ["hostname"], "delta": "0:00:00.001762", "end": "2024-10-02 12:32:45.927771", "msg": "", "rc": 0, "start": "2024-10-02 12:32:45.926009", "stderr": "", "stderr_lines": [], "stdout": "dojo-pc.elvees-nix.com", "stdout_lines": ["dojo-pc.elvees-nix.com"]}
+
+# PLAY [localhost] **************************************************************************************
+
+# TASK [command] ****************************************************************************************
+# changed: [localhost] => {"changed": true, "cmd": ["hostname"], "delta": "0:00:00.001872", "end": "2024-10-02 12:32:46.143502", "msg": "", "rc": 0, "start": "2024-10-02 12:32:46.141630", "stderr": "", "stderr_lines": [], "stdout": "dojo-pc.elvees-nix.com", "stdout_lines": ["dojo-pc.elvees-nix.com"]}
+
+# PLAY RECAP ********************************************************************************************
+# dojo-pc                    : ok=1    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+# localhost                  : ok=1    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   

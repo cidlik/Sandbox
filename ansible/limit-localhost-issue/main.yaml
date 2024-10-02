@@ -11,3 +11,14 @@
   gather_facts: false
   tasks:
     - command: hostname
+
+# PLAY [all] ********************************************************************************************
+
+# TASK [command] ****************************************************************************************
+# changed: [dojo-pc] => {"ansible_facts": {"discovered_interpreter_python": "/usr/libexec/platform-python"}, "changed": true, "cmd": ["hostname"], "delta": "0:00:00.001802", "end": "2024-10-02 12:32:18.389726", "msg": "", "rc": 0, "start": "2024-10-02 12:32:18.387924", "stderr": "", "stderr_lines": [], "stdout": "dojo-pc.elvees-nix.com", "stdout_lines": ["dojo-pc.elvees-nix.com"]}
+
+# PLAY [localhost] **************************************************************************************
+# skipping: no hosts matched
+
+# PLAY RECAP ********************************************************************************************
+# dojo-pc                    : ok=1    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
