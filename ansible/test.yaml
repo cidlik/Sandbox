@@ -1,0 +1,20 @@
+# ansible-playbook -i localhost, ~/Sandbox/ansible/test.yaml
+
+# ANSIBLE_ROLES_PATH=/home/rkuznecov/Projects/infra/system-config/playbooks/roles:$ANSIBLE_ROLES_PATH \
+#   ansible-playbook -i localhost, ~/Sandbox/ansible/test.yaml --ask-become-pass
+
+# ANSIBLE_LIBRARY=/home/rkuznecov/Projects/infra/opendev-zuul-jobs/roles/tox/library \
+#   ansible-playbook -i localhost, ~/Sandbox/ansible/test.yaml 
+
+# ansible-playbook -i localhost, ~/Sandbox/ansible/test.yaml -e some_var="foo bar" -v
+
+- hosts: all
+
+  tasks:
+    - debug:
+        msg: "{{ groups['all'] }}"
+
+    - set_fact:
+        groups: ["organ-pc"]
+
+    - command: hostname

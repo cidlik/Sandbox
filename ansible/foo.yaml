@@ -1,0 +1,6 @@
+board: MCom03BuB
+boot-switch-class: BMC_BuB
+boot-switch-id: ASSET-724
+power-switch-class: BMC_BuB
+power-switch-id: ASSET-724
+

@@ -1,0 +1,31 @@
+# ansible-playbook -i localhost, ~/Sandbox/ansible/test.yaml
+
+# ANSIBLE_ROLES_PATH=/home/rkuznecov/Projects/infra/system-config/playbooks/roles:$ANSIBLE_ROLES_PATH \
+#   ansible-playbook -i localhost, ~/Sandbox/ansible/test.yaml --ask-become-pass
+
+# ANSIBLE_LIBRARY=/home/rkuznecov/Projects/infra/opendev-zuul-jobs/roles/tox/library \
+#   ansible-playbook -i localhost, ~/Sandbox/ansible/test.yaml 
+
+# ansible-playbook -i localhost, ~/Sandbox/ansible/test.yaml -e some_var="foo bar" -v
+
+- hosts: all:!circinus
+  gather_facts: false
+  vars:
+    expected_properties: '{"username": "admin", "password": "admin", "ssh_username": "root", "ssh_password": "root", "update_firmware_file": "ecam02.swu", "update_firmware_timeout": 250, "form": "miniDome", "rev": "r1.1", "id": "ecam02", "name": "ECAM02", "model": "ECAM02DM r1.1"}'
+  tasks:
+    - set_fact:
+        camera: "{{ camera | default({}) | combine( {item[1].key: item[1].value}) }}"
+        cacheable: true
+      run_once: true
+      delegate_to: "{{ item[0] }}"
+      delegate_facts: true
+      loop: "{{ groups['all'] | product(expected_properties| from_json | dict2items) | list }}"
+
+    - debug:
+        msg: "{{ camera }}"
+
+- hosts: circinus
+  gather_facts: false
+  tasks:
+    - debug:
+        msg: "{{ camera }}"

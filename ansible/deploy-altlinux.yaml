@@ -1,0 +1,133 @@
+# ANSIBLE_ROLES_PATH=/home/rkuznecov/Projects/infra/zuul-jobs/roles ansible-playbook \
+#   -i localhost, ~/Sandbox/ansible/deploy-altlinux.yaml \
+#   -e zuul={} -e artifacts_build_filter="uuid=7b97f56917a745e0b176fbca74780e0d"
+
+# ansible-playbook -i localhost, ~/Sandbox/ansible/deploy-altlinux.yaml  -e zuul={} \
+#   -e artifacts_build_filter="job_name=mcom03-altlinux-p10-build&result=SUCCESS&pipeline=periodic"
+
+---
+- hosts: all
+
+  vars:
+    wd: tmp/deploy-altlinux
+    nfs_server_name: nfs-server-alt
+    tftp_server_name: tftp-server-alt
+
+  pre_tasks:
+    - name: Clear {{ wd }}
+      command: "rm -rf {{ wd }}"
+
+    - name: Get port from uuid
+      set_fact:
+        tftp_port: 2000
+        nfs_port: 2001
+
+  roles:
+    - role: download-artifacts
+      vars:
+        download_artifacts_job_filter: "{{ artifacts_build_filter }}"
+        download_artifacts_target_dir: "{{ wd }}"
+        download_artifacts_metadata:
+          type: altlinux_output_dir
+
+  tasks:
+    # DO IT MANUALLY!
+    # - name: Seting up the environment
+    #   shell: |
+    #     sudo systemctl start rpcbind; sudo systemctl stop nfs-server; sudo modprobe nfsd
+
+    - name: Stop servers
+      command: docker stop {{ tftp_server_name }} {{ nfs_server_name }}
+      ignore_errors: true
+
+    - name: Replace Buildroot rootfs with ALT Linux
+      args:
+        chdir: "{{ wd }}"
+      shell: |
+        set -exu
+        pwd
+        mkdir -p images/{sbl,sources.list.d}
+
+        ALTLINUX_ROOTFS=$(find -name mcom03-altlinux-*rootfs*.tar.gz -exec readlink -f {} \;)
+        mv $ALTLINUX_ROOTFS images/rootfs.tar.gz
+
+        mv {private,public}/sbl/* images/sbl
+        mv {private,public}/sources.list.d/* images/sources.list.d
+        rm -rf {private,public}/{sbl,sources.list.d}
+        mv {private,public}/* images
+
+    # - name: Stop servers
+    #   command: docker stop {{ tftp_server_name }} {{ nfs_server_name }}
+    #   ignore_errors: true
+
+    - name: Configure and run kernel TFTP server container
+      args:
+        chdir: "{{ wd }}/images"
+      shell: |
+        set -ex
+        mkdir pxelinux.cfg
+        cat > pxelinux.cfg/default-arm-mcom03 << EOF
+        TIMEOUT 3
+        LABEL MCom-03 Buildroot
+            MENU LABEL PXE boot
+            LINUX /vmlinuz
+            FDTDIR /elvees
+            APPEND console=ttyS0,115200 root=/dev/nfs rw nfsroot={{ ansible_default_ipv4.address }}:/,port={{ nfs_port }},vers=4,tcp ip=dhcp earlycon
+        EOF
+        docker run --detach --privileged --rm \
+          --name {{ tftp_server_name }} \
+          --publish {{ ansible_default_ipv4.address }}:{{ tftp_port }}:69/udp \
+          --volume $(pwd):/var/tftpboot:rw \
+          pghalliday/tftp
+
+    - name: Configure and run rootfs NFS server container
+      args:
+        chdir: "{{ wd }}"
+      shell: |
+        set -ex
+
+        readonly CONTAINER={{ nfs_server_name }}
+
+        TMPFS_SIZE=$(echo \
+          "$(( $(zcat images/rootfs.tar.gz | wc -c) \
+            + 3 * 1024 * 1024 * 1024 ))")
+        docker run --detach --privileged --rm \
+          --name $CONTAINER \
+          --publish {{ ansible_default_ipv4.address }}:{{ nfs_port }}:2049/tcp \
+          --mount type=tmpfs,destination=/exports,tmpfs-size=$TMPFS_SIZE \
+          --volume /var/run/rpcbind.sock:/var/run/rpcbind.sock \
+          nfs-server
+        alias docker-exec='docker exec --interactive $CONTAINER'
+
+        docker-exec tar -xz -C /exports < images/rootfs.tar.gz
+
+        ssh-keygen -t rsa -f ssh_host_rsa_key -N ""
+        for f in ssh_host_rsa_key*; do
+          docker-exec cp /dev/stdin /exports/etc/openssh/$f < $f
+        done
+
+        docker-exec bash -c "echo 'export PS1=\"# \"' >> /exports/root/.bashrc"
+        docker-exec ln -s /exports/lib/systemd/system/sshd.service \
+          /exports/etc/systemd/system/multi-user.target.wants/sshd.service
+
+        HOST_KEY_FOR_BOARD=$(ssh-keygen -y -f ~/.ssh/id_rsa)
+        docker-exec cp /dev/stdin /exports/root/.ssh/authorized_keys \
+          <<< $(ssh-keygen -y -f ~/.ssh/id_rsa)
+
+        # docker-exec sed -i "s/#PermitRootLogin without-password/PermitRootLogin yes/g" \
+        #   /exports/etc/openssh/sshd_config
+
+        SOURCE_LISTS=$(find images/sources.list.d \
+          -type f -name '*.list' -exec readlink -f {} \;)
+        for f in $SOURCE_LISTS; do
+          docker-exec cp /dev/stdin /exports/etc/apt/sources.list.d/$(basename $f) < $f
+        done
+
+        docker-exec ln -sf /proc/net/pnp /exports/etc/resolv.conf
+        # docker-exec cp --force --remove-destination /dev/stdin /exports/etc/resolv.conf \
+        #   < /etc/resolv.conf
+        # docker-exec chmod $(stat -c "%a" /etc/resolv.conf) /exports/etc/resolv.conf
+
+        docker-exec bash -c "echo 'export LANG=en_US.UTF-8' >> /exports/root/.bashrc"
+
+        docker logs --timestamps $CONTAINER

@@ -1,0 +1,12 @@
+# ansible-playbook -i localhost, test.yaml
+
+- hosts: localhost
+
+  tasks:
+    - import_role:
+        name: some-role
+      vars:
+        some_external_variable: foo
+
+    - debug:
+        msg: "{{ some_external_variable }}"

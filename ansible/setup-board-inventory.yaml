@@ -1,0 +1,7 @@
+board_nodes:
+  hosts:
+    dojo-pc.elvees.com:
+  vars:
+    ci_bots:
+      - cidlikbot
+      - cidlikbot1

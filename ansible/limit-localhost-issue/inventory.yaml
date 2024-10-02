@@ -1,0 +1,8 @@
+all:
+  children:
+    exclude_group:
+      hosts:
+        circinus-pc: null
+  hosts:
+    dojo-pc:
+    circinus-pc:

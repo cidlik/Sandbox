@@ -1,0 +1,10 @@
+skip_tests:
+  - testname: tests/linux/test_linux.py::test_sysinfo
+    asset: 724
+    reason: foo
+  - testname: tests/linux/test_cpu_ram.py::test_cpu_stress_ng[10]
+    asset: 825
+    reason: bar
+  - testname: tests/linux/test_hdmi.py::test_hdmi_connection
+    asset: 724
+    reason: xyz

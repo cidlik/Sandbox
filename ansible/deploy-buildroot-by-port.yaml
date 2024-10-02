@@ -1,0 +1,109 @@
+# ansible-playbook -i localhost ~/Sandbox/ansible/deploy-buildroot-by-port.yaml \
+#   -e zuul={} -e artifacts_build_filter="uuid=7b97f56917a745e0b176fbca74780e0d" \
+#   -e eth_device=eth2 -e download_artifacts_custom_url=https://pdist.elvees.com/mcom03/buildroot/2023.10/buildroot/mcom03-linux419-priv-buildroot-build/artifacts
+
+# ansible-playbook -i localhost ~/Sandbox/ansible/deploy-buildroot-by-port.yaml  -e zuul={} \
+#   -e artifacts_build_filter="job_name=mcom03-linux510-priv-buildroot-build&result=SUCCESS&pipeline=periodic"
+
+# DO IT MANUALLY!
+# - name: Seting up the environment
+#   shell: |
+#     sudo systemctl start rpcbind; sudo systemctl stop nfs-server; sudo modprobe nfsd
+
+---
+- hosts: localhost
+  vars:
+    wd: tmp/deploy-buildroot
+    nfs_server_name: rkuznecov-nfs-server
+    tftp_server_name: rkuznecov-tftp-server
+    eth_device: eth0
+
+  pre_tasks:
+    - name: Clear {{ wd }}
+      command: "rm -rf {{ wd }}"
+
+    - name: Get tftp port from uuid
+      set_fact:
+        tftp_port: 69
+
+    - name: Get nfs port from uuid
+      set_fact:
+        nfs_port: 2049
+
+    - debug:
+        msg: |
+          tftp port: {{ tftp_port }}
+          nfs port: {{ nfs_port }}
+
+  roles:
+    - role: download-artifacts
+      vars:
+        download_artifacts_job_filter: "{{ artifacts_build_filter }}"
+        download_artifacts_target_dir: "{{ wd }}"
+        download_artifacts_metadata:
+          type: buildroot-output-dir
+
+  tasks:
+    - name: Stop servers
+      command: docker stop {{ tftp_server_name }} {{ nfs_server_name }}
+      ignore_errors: true
+
+    - name: Configure and run kernel TFTP server container
+      args:
+        chdir: "{{ wd }}/images"
+      shell: |
+        set -ex
+        mkdir pxelinux.cfg
+        cat > pxelinux.cfg/default-arm-mcom03 << EOF
+        TIMEOUT 3
+        LABEL MCom-03 Buildroot
+            MENU LABEL PXE boot
+            LINUX /Image
+            FDTDIR /elvees
+            APPEND console=ttyS0,115200 root=/dev/nfs rw nfsroot={{ ansible_default_ipv4.address }}:/,port={{ nfs_port }},vers=4,tcp ip=::::cidlik:{{ eth_device }}:dhcp earlycon
+        EOF
+        docker run --detach --privileged --rm \
+          --name {{ tftp_server_name }} \
+          --label "container-owner=$(whoami)" \
+          --publish {{ ansible_default_ipv4.address }}:{{ tftp_port }}:69/udp \
+          --volume $(pwd):/var/tftpboot:rw \
+          pghalliday/tftp
+        # -p 10.81.45.149:800:69/udp
+
+    - name: Configure and run rootfs NFS server container
+      args:
+        chdir: "{{ wd }}"
+      shell: |
+        set -ex
+
+        readonly CONTAINER={{ nfs_server_name }}
+
+        TMPFS_SIZE=$(echo "$(( 10 * 1024 * 1024 * 1024 ))")
+        docker run --detach --privileged --rm \
+          --name $CONTAINER \
+          --label "container-owner=$(whoami)" \
+          --publish {{ ansible_default_ipv4.address }}:{{ nfs_port }}:2049/tcp \
+          --mount type=tmpfs,destination=/exports,tmpfs-size=$TMPFS_SIZE \
+          --volume /var/run/rpcbind.sock:/var/run/rpcbind.sock \
+          nfs-server
+        alias docker-exec='docker exec --interactive $CONTAINER'
+
+        docker-exec tar -xz -C /exports < images/rootfs.tar.gz
+
+        ssh-keygen -t rsa -f ssh_host_rsa_key -N ""
+        for f in ssh_host_rsa_key*; do
+          docker-exec cp /dev/stdin /exports/etc/ssh/$f < $f
+        done
+
+        docker-exec bash -c "echo 'export PS1=\"# \"' >> /exports/root/.bashrc"
+
+        docker-exec bash -c "echo 'alias cp=\"cp --interactive=never\"' >> /exports/root/.bashrc"
+        docker-exec bash -c "echo 'alias mv=\"mv --interactive=never\"' >> /exports/root/.bashrc"
+        docker-exec bash -c "echo 'alias rm=\"rm --interactive=never\"' >> /exports/root/.bashrc"
+        docker-exec bash -c "echo 'export LANG=en_US.UTF-8' >> /exports/root/.bashrc"
+
+        docker-exec cp --force --remove-destination /dev/stdin /exports/etc/resolv.conf \
+          < /etc/resolv.conf
+        docker-exec chmod $(stat -c "%a" /etc/resolv.conf) /exports/etc/resolv.conf
+
+        docker logs --timestamps $CONTAINER

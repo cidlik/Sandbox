@@ -1,0 +1,40 @@
+---
+- hosts: all
+  tasks:
+    - name: Create source.list
+      command: cp /home/rkuznecov/ansible/analyze-tests/source.list.backup /home/rkuznecov/ansible/analyze-tests/source.list
+
+    - name: Read source.list
+      shell: |
+        echo $(cat /home/rkuznecov/ansible/analyze-tests/source.list)
+      register: sources
+
+    - name: Get skipped tests
+      include_vars:
+        file: /home/rkuznecov/ansible/analyze-tests/skip-tests.yaml
+        name: skipfile
+
+    - name: Show source.list
+      debug:
+        msg: "{{ sources.stdout }}"
+
+    - name: Show skipfile.skip_tests
+      debug:
+        msg: "{{ skipfile.skip_tests }}"
+
+    - name: Delete skipped test from file
+      shell: |
+        DELETE_NUM=$(grep -Fn "{{ item.testname }}" /home/rkuznecov/ansible/analyze-tests/source.list | grep -oE "^[0-9]*")
+        sed -i "${DELETE_NUM}d" /home/rkuznecov/ansible/analyze-tests/source.list
+      when: item.asset == 724
+      loop: "{{ skipfile.skip_tests }}"
+      register: skipped_tests
+
+    - name: Show skipped tests
+      debug:
+        msg: |
+          {% for st in skipped_tests.results %}
+            {% if st.changed == True %}
+              {{ st.item.testname }} was skipped because: {{ st.item.reason }}
+            {% endif %}
+          {% endfor %}

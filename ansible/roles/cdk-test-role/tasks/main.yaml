@@ -1,0 +1,8 @@
+- name: First
+  tags: test
+  debug:
+    msg: This is test-role
+
+- name: Second
+  debug:
+    msg: This is test-role again

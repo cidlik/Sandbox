@@ -1,0 +1,11 @@
+tests/baremetal/test_jtag.py::test_memory[SPRAM-2684354560-65536]
+tests/baremetal/test_jtag.py::test_memory[CRAM0-3214934016-32768]
+
+tests/linux/test_linux.py::test_sysinfo
+
+tests/linux/test_cpu_ram.py::test_cpu_stress_ng[10]
+tests/linux/test_cpu_ram.py::test_ddr_size
+tests/linux/test_cpu_ram.py::test_memtester_simple[1024]
+
+tests/linux/test_hdmi.py::test_hdmi_connection
+tests/linux/test_hdmi.py::test_hdmi_modetest

@@ -1,0 +1,16 @@
+- name: Remove all containers
+  shell: |
+    set -ex
+    containers=$(docker ps -aq)
+    docker stop $containers 2>/dev/null || true
+    docker rm $containers 2>/dev/null || true
+
+- name: Run test
+  shell: |
+    {{ item }}
+    ./remove-docker.py
+    docker ps -a
+  register: out
+
+- debug:
+    msg: "{{ out.stdout_lines }}"

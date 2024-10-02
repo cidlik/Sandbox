@@ -1,0 +1,70 @@
+# PWD: 
+# Run via cmd "ansible-playbook -i localhost remove-container.yaml"
+
+- hosts: localhost
+  vars:
+    docker_label: com.elvees.container-owner
+
+  tasks:
+    - name: Generate Python script for removing containers
+      shell: |
+        set -ex
+        cat > remove-docker.py << EOF
+        #!/usr/bin/env python3
+
+        import json
+        import subprocess
+        import sys
+
+        LABEL_OWNER = "{{ docker_label }}"
+
+        def remove(container):
+            subprocess.check_call(["docker", "stop", container])
+            subprocess.run(["docker", "rm", container], check=False)
+
+        if __name__ == "__main__":
+            containers = subprocess.check_output(["docker", "ps", "-aq"]).decode().strip()
+            if not containers:
+                print("Have not containers. Skip")
+                sys.exit(0)
+
+            current_user = subprocess.check_output(["whoami"]).decode().strip()
+            for container in containers.split("\n"):
+                raw = subprocess.check_output(
+                    ["docker", "inspect", "-f", "json", container]
+                ).decode().strip()
+                labels = json.loads(raw)[0]["Config"].get("Labels", None)
+                if not LABEL_OWNER in labels:
+                    print(f"Remove {container}. Reason: has not '{LABEL_OWNER}' label")
+                    remove(container)
+                    continue
+                if current_user == labels[LABEL_OWNER]:
+                    print(f"Remove {container}. Reason: container by current user")
+                    remove(container)
+                else:
+                    print(
+                        (
+                            f"Skip {container}. Reason: container created by "
+                            f"{ labels[LABEL_OWNER] } on the same host"
+                        )
+                    )
+            sys.exit(0)
+        EOF
+        chmod +x remove-docker.py
+
+    - name: Run testsuites
+      include_tasks: run-tests.yaml
+      loop:
+        - |
+          # 1. Have not containers
+        - |
+          # 2. Containers:
+          #       * without labels container-owner
+          #       * with $(whoami) label
+          #       * with not-$(whoami) label
+          #       * with somebody label
+          alias docker-run="docker run --detach"
+          docker-run hello-world
+          docker-run --label {{ docker_label }}=$(whoami) hello-world
+          docker-run --label {{ docker_label }}=not-$(whoami) hello-world
+          docker-run --label {{ docker_label }}=somebody hello-world

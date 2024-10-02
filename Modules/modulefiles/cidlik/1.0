@@ -1,0 +1,10 @@
+#%Module
+
+# Add module via:
+#   module use --append /home/rkuznecov/Sandbox/Modules/modulefiles
+
+proc ModulesHelp { } {
+   puts stderr "This is test module"
+}
+
+puts "echo Slam"

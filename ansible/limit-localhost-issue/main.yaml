@@ -1,0 +1,13 @@
+# ansible-playbook -i inventory.yaml main.yaml -v '--limit=!exclude_group'
+
+# Expects that it will run in one host dojo-pc
+- hosts: all
+  gather_facts: false
+  tasks:
+    - command: hostname
+
+# Expects that it will run in one host dojo-pc, but it's not the case
+- hosts: localhost
+  gather_facts: false
+  tasks:
+    - command: hostname

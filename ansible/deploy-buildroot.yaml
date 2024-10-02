@@ -1,0 +1,80 @@
+# ANSIBLE_ROLES_PATH=/home/rkuznecov/infra/zuul-jobs/roles ansible-playbook \
+#   -i ~/ansible/inventory.yaml ~/ansible/deploy-buildroot.yaml -c local \
+#   -e zuul={} -e artifacts_build_filter="uuid=7b97f56917a745e0b176fbca74780e0d"
+
+---
+- hosts: all
+  vars:
+    wd: tmp/deploy-buildroot
+
+  pre_tasks:
+    - name: Clear {{ wd }}
+      command: "rm -rf {{ wd }}"
+
+  roles:
+    - role: download-artifacts
+      vars:
+        download_artifacts_job_filter: "{{ artifacts_build_filter }}"
+        download_artifacts_target_dir: "{{ wd }}"
+        download_artifacts_type: buildroot-output-dir
+
+  tasks:
+    # DO IT MANUALLY!
+    # - name: Seting up the environment
+    #   shell: |
+    #     sudo systemctl start rpcbind; sudo systemctl stop nfs-server; sudo modprobe nfsd
+
+    - name: Stop servers
+      command: docker stop tftp-server nfs-server
+      ignore_errors: true
+
+    - name: Configure and run kernel TFTP server container
+      args:
+        chdir: "{{ wd }}/images"
+      shell: |
+        set -ex
+        mkdir pxelinux.cfg
+        cat > pxelinux.cfg/default-arm-mcom03 << EOF
+        TIMEOUT 3
+        LABEL MCom-03 Buildroot
+            MENU LABEL PXE boot
+            LINUX /Image
+            FDTDIR /elvees
+            APPEND console=ttyS0,115200 root=/dev/nfs rw nfsroot={{ ansible_default_ipv4.address }}:/exports,vers=3 ip=dhcp earlycon
+        EOF
+        docker run --detach --privileged --rm \
+          --name tftp-server \
+          --network host \
+          --volume $(pwd):/var/tftpboot:rw \
+          pghalliday/tftp
+        # -p 10.81.45.149:800:69/udp
+
+    - name: Configure and run rootfs NFS server container
+      args:
+        chdir: "{{ wd }}"
+      shell: |
+        set -ex
+
+        readonly CONTAINER=nfs-server
+
+        TMPFS_SIZE=$(echo \
+          "$(( $(zcat images/rootfs.tar.gz | wc -c) \
+            + 2147483648 ))")
+        docker run --detach --privileged --rm \
+          --name $CONTAINER \
+          --network host \
+          --mount type=tmpfs,destination=/exports,tmpfs-size=$TMPFS_SIZE \
+          --volume /var/run/rpcbind.sock:/var/run/rpcbind.sock \
+          nfs-server
+        alias docker-exec='docker exec --interactive $CONTAINER'
+
+        docker-exec tar -xz -C /exports < images/rootfs.tar.gz
+
+        ssh-keygen -t rsa -f ssh_host_rsa_key -N ""
+        for f in ssh_host_rsa_key*; do
+          docker-exec cp /dev/stdin /exports/etc/ssh/$f < $f
+        done
+
+        docker-exec bash -c "echo 'export PS1=\"# \"' >> /exports/root/.bashrc"
+
+        docker logs --timestamps $CONTAINER

@@ -1,0 +1,26 @@
+---
+- hosts: all
+  vars:
+    board_asset: 724
+
+  tasks:
+    - name: Get skipped tests
+      include_vars:
+        file: skip-tests.yaml
+        name: skip_test_file
+
+    - name: Show skipfile.skip_tests
+      debug:
+        msg: "{{ skip_test_file.skip_tests }}"
+
+    - name: Select skipped tests
+      set_fact:
+        skip_tests: >-
+          {% for st in skip_test_file.skip_tests %}
+            {% if st.asset == board_asset %}
+              {{- "--deselect " + st.testname + ' ' -}}
+            {% endif %}
+          {% endfor %}
+
+    - debug:
+        msg: "{{ skip_tests }}"

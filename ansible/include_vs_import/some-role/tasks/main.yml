@@ -1,0 +1,5 @@
+- debug:
+    msg: "{{ some_external_variable }}"
+
+- shell:
+    echo "{{ some_external_variable }}" > /home/rkuznecov/Sandbox/ansible/include_vs_import/foo

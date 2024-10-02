@@ -1,0 +1,13 @@
+# ansible-playbook -i inventory.yaml workaround.yaml -v
+
+# It will run in one host dojo-pc
+- hosts: all:!exclude_group
+  gather_facts: false
+  tasks:
+    - command: hostname
+
+# It will run in one host dojo-pc
+- hosts: localhost
+  gather_facts: false
+  tasks:
+    - command: hostname
